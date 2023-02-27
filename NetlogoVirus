@@ -1,0 +1,134 @@
+turtles-own
+  [ sick?                ;; if true, the turtle is infectious
+    old?                 ;; if true, then the turtle is over 65 years old
+    pop-chance-recovery  ;; if old? elder-recovery-chance else population-recovery-chance
+    remaining-immunity   ;; how many days of immunity the turtle has left
+    sick-period           ;; how long, in days, the turtle has been infectious
+    how-old              ;; how many days old the turtle is
+    movement? ]          ;; what amount of turtles get to move
+
+
+globals
+  [ %infected            ;; what % of the population is infectious
+    %immune              ;; what % of the population is immune
+    lifetime             ;; the lifetime of a turtle
+    immunity-duration    ;; how many days immunity lasts
+    runtime-end? ]       ;; the model stop when there are no sick people
+
+;; The setup is divided into four procedures
+to setup
+  clear-all
+  setup-constants
+  setup-turtles
+  update-global-variables
+  update-display
+  reset-ticks
+end
+
+to setup-turtles
+  create-turtles population
+    [ setxy random-xcor random-ycor
+      set  how-old random lifetime
+      ifelse  how-old > 365 * 65 [ set old? true] [set old? false]
+      set sick-period 0
+      set remaining-immunity 0
+      set size 1.5  ;; easier to see
+      get-healthy
+      ifelse random 100 < %movement-allowed [set movement? true] [set movement? false] ]
+  ask n-of 5 turtles
+    [ get-sick ]
+  ask n-of 20 turtles
+    [ become-immune ]
+end
+
+to get-sick ;; turtle procedure
+  set sick? true
+  set remaining-immunity 0
+end
+
+to get-healthy ;; turtle procedure
+  set sick? false
+  set remaining-immunity 0
+  set sick-period 0
+end
+
+to become-immune ;; turtle procedure
+  set sick? false
+  set sick-period 0
+  set remaining-immunity immunity-duration
+end
+
+;; This sets up basic constants of the model.
+to setup-constants
+  set lifetime 90 * 365      ;; 90 times 365days = 50 years = 32850 days old
+  set immunity-duration 365
+  set runtime-end? false
+end
+
+to go
+  if not runtime-end?
+  [ ask turtles [
+    get-older
+    move
+    if sick? [ recover-or-die ]
+    if sick? [ infect ]
+  ]
+  update-global-variables
+  update-display
+  tick
+  ]
+end
+
+to update-global-variables
+  if count turtles > 0
+    [ set %infected (count turtles with [ sick? ] / count turtles) * 100
+      set %immune (count turtles with [ immune? ] / count turtles) * 100
+      set runtime-end? %infected = 0 ] ;;the model will stop running when there is no infected people
+end
+
+to update-display
+  ask turtles
+    [ if turtle-shape = "circle" [ set shape "circle" ]
+      if turtle-shape = "person" [ set shape "person" ]
+      set color ifelse-value sick? [ red ] [ ifelse-value immune? [ grey ] [ green ] ] ]
+end
+
+;;Turtle counting variables are advanced.
+to get-older ;; turtle procedure
+  ifelse  how-old > lifetime [ die ] [if  how-old > 65 * 360 [ set old? true] ]
+  if immune? [ set remaining-immunity remaining-immunity - 1 ]
+  if sick? [ set sick-period sick-period + 1 ]
+end
+
+;; Turtles move about at random.
+to move ;; turtle procedure
+  rt random 100
+  lt random 100
+  if movement? [ fd 1]
+end
+
+;; If a turtle is sick, it infects other turtles on the same patch.
+;; Immune turtles don't get sick.
+to infect ;; turtle procedure
+  ask other turtles-here with [ not sick? and not immune? ]
+    [ if random-float 100 < %infectiousness
+      [ get-sick ] ]
+end
+
+;; Once the turtle has been sick long enough, it
+;; either recovers (and becomes immune) or it dies.
+to recover-or-die ;; turtle procedure
+  if old? [ set pop-chance-recovery chance-recover% ]
+  if sick-period > duration                        ;; If the turtle has survived past the virus' duration, then
+    [ ifelse random-float 100 < pop-chance-recovery   ;; either recover or die
+      [ become-immune ]
+      [ die ] ]
+end
+
+to-report immune?
+  report remaining-immunity > 0
+end
+
+to startup
+  setup-constants
+end
